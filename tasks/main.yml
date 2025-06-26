@@ -1,0 +1,84 @@
+---
+# Déploiement portable de quiz-ansible sur Debian/Ubuntu et RedHat/Rocky
+
+- name: Mettre à jour les paquets sur RedHat
+  dnf:
+    name: '*'
+    state: latest
+    update_cache: yes
+  when: ansible_os_family == "RedHat"
+
+- name: Mettre à jour les paquets sur Debian
+  apt:
+    update_cache: yes
+    upgrade: dist
+  when: ansible_os_family == "Debian"
+
+- name: Installer paquets sur RedHat
+  dnf:
+    name:
+      - git
+      - procps-ng
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Installer paquets sur Debian
+  apt:
+    name:
+      - git
+      - procps
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Télécharger le script Node.js 23 RedHat
+  get_url:
+    url: https://rpm.nodesource.com/setup_23.x
+    dest: /tmp/setup_node.sh
+    mode: '0755'
+  when: ansible_os_family == "RedHat"
+
+- name: Télécharger le script Node.js 23 Debian
+  get_url:
+    url: https://deb.nodesource.com/setup_23.x
+    dest: /tmp/setup_node.sh
+    mode: '0755'
+  when: ansible_os_family == "Debian"
+
+- name: Exécuter le script Node.js
+  command: bash /tmp/setup_node.sh
+
+- name: Installer Node.js
+  package:
+    name: nodejs
+    state: present
+
+- name: Cloner le dépôt de l'application
+  git:
+    repo: https://github.com/franklin-tutorials/quiz-ansible.git
+    dest: "{{ app_dir | default('/opt/leboss') }}"
+    version: HEAD
+
+# Puis toutes les tâches suivantes :
+- name: Installer les dépendances npm
+  command: npm install
+  args:
+    chdir: "{{ app_dir | default('/opt/leboss') }}"
+
+- name: Compiler l'application
+  command: npm run build
+  args:
+    chdir: "{{ app_dir | default('/opt/leboss') }}"
+
+- name: Installer serve globalement
+  npm:
+    name: serve
+    global: yes
+    state: present
+
+- name: Lancer l'application
+  shell: serve -s dist -l {{ serve_port | default(3000) }} -n
+  args:
+    chdir: "{{ app_dir | default('/opt/leboss') }}"
+  async: 3600
+  poll: 0
+
